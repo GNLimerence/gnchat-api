@@ -122,3 +122,40 @@ export const signOut = async (req: Request, res: Response) => {
     return res.status(500).json(fail("Internal Error"));
   }
 };
+
+export const refreshToken = async (req: Request, res: Response) => {
+  try {
+    const token = req.cookies?.refreshToken;
+
+    if (!token) {
+      return res.status(401).json(fail("Token not found"));
+    }
+
+    const session = await Session.findOne({ refreshToken: token });
+
+    if (!session) {
+      return res.status(403).json(fail("Token is expired"));
+    }
+
+    if (session.expiredAt < new Date()) {
+      return res.status(403).json(fail("Token is expired"));
+    }
+
+    if (process.env.JWT_SECRET) {
+      const accessToken = jwt.sign(
+        {
+          userId: session.userId,
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: ACCESS_TOKEN_TTL }
+      );
+
+      return res
+        .status(200)
+        .json(ok<{ accessToken: string }>({ accessToken }, "Success"));
+    }
+  } catch (error) {
+    console.error("Error when call refreshToken", error);
+    return res.status(500).json(fail("Internal server error"));
+  }
+};
